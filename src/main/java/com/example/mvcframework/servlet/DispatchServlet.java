@@ -1,5 +1,6 @@
 package com.example.mvcframework.servlet;
 
+import com.example.mvcframework.annotations.Autowired;
 import com.example.mvcframework.annotations.Controller;
 import com.example.mvcframework.annotations.Service;
 
@@ -11,6 +12,7 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
+import java.lang.reflect.Field;
 import java.util.*;
 
 public class DispatchServlet extends HttpServlet {
@@ -51,8 +53,28 @@ public class DispatchServlet extends HttpServlet {
     }
 
     //实现依赖注入
-    private void doAutowired() {
+    private void doAutowired() throws IllegalAccessException {
+        if (ioc.isEmpty()) return;
 
+        for (Map.Entry<String, Object> entry : ioc.entrySet()) {
+            //获取bean对象中的字段
+            Field[] declaredFields = entry.getValue().getClass().getDeclaredFields();
+            for (int i = 0; i < declaredFields.length; i++) {
+                Field declaredField = declaredFields[i];
+                if (!declaredField.isAnnotationPresent(Autowired.class)) {
+                    continue;
+                }
+
+                Autowired annotation = declaredField.getAnnotation(Autowired.class);
+                String beanName = annotation.value();
+                if ("".equals(beanName)) {
+                    beanName = declaredField.getType().getName();
+                }
+
+                declaredField.setAccessible(true);
+                declaredField.set(entry.getValue(), ioc.get(beanName));
+            }
+        }
     }
 
     //ioc容器
