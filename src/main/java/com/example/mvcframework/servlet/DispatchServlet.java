@@ -2,6 +2,7 @@ package com.example.mvcframework.servlet;
 
 import com.example.mvcframework.annotations.Autowired;
 import com.example.mvcframework.annotations.Controller;
+import com.example.mvcframework.annotations.RequestMapping;
 import com.example.mvcframework.annotations.Service;
 
 import javax.servlet.FilterConfig;
@@ -13,6 +14,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStream;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
 import java.util.*;
 
 public class DispatchServlet extends HttpServlet {
@@ -22,6 +24,8 @@ public class DispatchServlet extends HttpServlet {
     private List<String> classNames = new ArrayList<>();//缓存扫描到的类的全限定类名
 
     private Map<String, Object> ioc = new HashMap<>();
+
+    private Map<String, Method> handlerMapping = new HashMap<>();
 
     @Override
     public void init() throws ServletException {
@@ -49,11 +53,40 @@ public class DispatchServlet extends HttpServlet {
     }
 
     private void initHandlerMapping() {
+        if (ioc.isEmpty()) {
+            return;
+        }
+        for (Map.Entry<String, Object> entry : ioc.entrySet()) {
+            //获取ioc的class类型
+            Class<?> aClass = entry.getValue().getClass();
+            if (!aClass.isAnnotationPresent(Controller.class)) {
+                continue;
+            }
 
+            String baseUrl = "";
+            if (aClass.isAnnotationPresent(RequestMapping.class)) {
+                RequestMapping annotation = aClass.getAnnotation(RequestMapping.class);
+                baseUrl = annotation.value();
+            }
+
+            //获取方法
+            Method[] methods = aClass.getMethods();
+            for (Method method : methods) {
+                if (!method.isAnnotationPresent(RequestMapping.class)) {
+                    continue;
+                }
+
+                String subQuery = method.getAnnotation(RequestMapping.class).value();
+                String url = baseUrl + subQuery;
+
+                //建立映射关系
+                handlerMapping.put(url, method);
+            }
+        }
     }
 
     //实现依赖注入
-    private void doAutowired() throws IllegalAccessException {
+    private void doAutowired() {
         if (ioc.isEmpty()) return;
 
         for (Map.Entry<String, Object> entry : ioc.entrySet()) {
@@ -72,7 +105,11 @@ public class DispatchServlet extends HttpServlet {
                 }
 
                 declaredField.setAccessible(true);
-                declaredField.set(entry.getValue(), ioc.get(beanName));
+                try {
+                    declaredField.set(entry.getValue(), ioc.get(beanName));
+                } catch (IllegalAccessException e) {
+                    e.printStackTrace();
+                }
             }
         }
     }

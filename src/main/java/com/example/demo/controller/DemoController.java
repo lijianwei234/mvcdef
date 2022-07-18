@@ -15,6 +15,7 @@ public class DemoController {
     @Autowired
     private DemoService demoService;
 
+    @RequestMapping("/query")
     public String query(HttpServletRequest request, HttpServletResponse response, String name) {
         return demoService.get(name);
     }
